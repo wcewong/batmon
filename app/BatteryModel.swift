@@ -28,6 +28,7 @@ final class BatteryModel: ObservableObject {
     private var timer: Timer?
     private var started = false
     private let ble = BLEReader()  // live BLE battery reads (CoreBluetooth, main queue)
+    private var bleCache: [String: Int] = [:]  // last-known BLE level per device name
 
     /// The lowest connected battery level, for the menu-bar glyph. nil when nothing is known.
     var lowestPercent: Int? {
@@ -57,10 +58,12 @@ final class BatteryModel: ObservableObject {
             let devs = BatteryModel.poll()
             log.info("poll complete: \(devs.count, privacy: .public) device(s)")
             Task { @MainActor in
-                self.devices = BatteryModel.sort(devs)
+                var d = devs
+                self.overlayCache(&d)   // show last-known BLE levels immediately (no flicker to "?")
+                self.devices = BatteryModel.sort(d)
                 self.lastUpdated = Date()
                 self.polling = false
-                // Fill in fresh BLE battery levels (e.g. a knob macOS hasn't re-read after wake).
+                // Then refresh with a fresh BLE read (e.g. a knob macOS hasn't re-read after wake).
                 self.ble.read { levels in
                     MainActor.assumeIsolated { self.applyBLE(levels) }
                 }
@@ -70,7 +73,8 @@ final class BatteryModel: ObservableObject {
 
     /// Merge live BLE battery levels onto the current devices, matched by fuzzy name.
     private func applyBLE(_ levels: [String: Int]) {
-        guard !levels.isEmpty else { return }
+        guard !levels.isEmpty else { return }   // a failed read keeps the last value (see bleCache)
+        for (k, v) in levels { bleCache[k] = v }
         var devs = devices
         var changed = false
         for i in devs.indices {
@@ -80,6 +84,18 @@ final class BatteryModel: ObservableObject {
             }
         }
         if changed { devices = BatteryModel.sort(devs) }
+    }
+
+    /// Overlay the last-known BLE levels onto devices that currently have no battery value, so a
+    /// transient read miss does not flip a device back to "?".
+    private func overlayCache(_ devs: inout [Device]) {
+        guard !bleCache.isEmpty else { return }
+        for i in devs.indices where devs[i].percent < 0 {
+            for (name, pct) in bleCache where BatteryModel.namesMatch(devs[i].name, name) {
+                devs[i].percent = pct
+                break
+            }
+        }
     }
 
     private static func sort(_ devs: [Device]) -> [Device] {

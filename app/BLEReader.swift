@@ -32,6 +32,9 @@ final class BLEReader: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate 
 
     private func start() {
         let conn = central.retrieveConnectedPeripherals(withServices: [svc])
+        if ProcessInfo.processInfo.environment["BATMON_DEBUG"] != nil {
+            FileHandle.standardError.write("[blereader] state=\(central.state.rawValue) connected=\(conn.count)\n".data(using: .utf8)!)
+        }
         pending = Set(conn)
         guard !conn.isEmpty else { finish(); return }
         for p in conn {
@@ -41,6 +44,9 @@ final class BLEReader: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate 
     }
 
     private func finish() {
+        if ProcessInfo.processInfo.environment["BATMON_DEBUG"] != nil {
+            FileHandle.standardError.write("[blereader] finish results=\(results)\n".data(using: .utf8)!)
+        }
         timeout?.cancel(); timeout = nil
         for p in pending { central.cancelPeripheralConnection(p) }
         pending.removeAll()
