@@ -1,0 +1,56 @@
+# macOS build. The portable vendor drivers (src/drivers) compile unchanged; the IOKit HID backend
+# (src/mac/hid_mac.mm) replaces the Linux hidraw / Windows Win32 backend.
+#
+#   make -f Makefile.mac cli      # build/batmon-cli   (poll harness)
+#   make -f Makefile.mac app      # build/Batmon.app   (SwiftUI menu-bar app)
+#   make -f Makefile.mac clean
+
+CXX      ?= clang++
+DEPLOY   := arm64-apple-macos13.0
+CXXFLAGS ?= -std=c++17 -O2 -Wall -Wno-missing-field-initializers -Isrc -target $(DEPLOY)
+FRAMEWORKS := -framework IOKit -framework CoreFoundation -framework Foundation -framework CoreBluetooth
+
+# ---- C++/Obj-C++ core (everything except the CLI's main) → static library -------------------
+DRIVERS   := $(wildcard src/drivers/*.cpp)
+CORE_CPP  := $(DRIVERS) src/mac/devices_mac.cpp
+CORE_MM   := src/mac/hid_mac.mm src/mac/ble_mac.mm src/mac/batcore_bridge.mm
+CORE_OBJ  := $(patsubst src/%.cpp,build/%.o,$(CORE_CPP)) $(patsubst src/%.mm,build/%.o,$(CORE_MM))
+LIB       := build/libbatcore.a
+
+$(LIB): $(CORE_OBJ)
+	libtool -static -o $@ $^
+
+build/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+build/%.o: src/%.mm
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# ---- CLI harness ----------------------------------------------------------------------------
+cli: build/batmon-cli
+build/batmon-cli: $(LIB) build/cli/main_cli.o
+	$(CXX) build/cli/main_cli.o $(LIB) -o $@ $(FRAMEWORKS)
+
+# ---- SwiftUI menu-bar app -------------------------------------------------------------------
+APP       := build/Batmon.app
+SWIFT_SRC := $(wildcard app/*.swift)
+
+app: $(APP)
+$(APP): $(LIB) $(SWIFT_SRC) app/Info.plist
+	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
+	cp app/Info.plist $(APP)/Contents/Info.plist
+	swiftc -O -parse-as-library -target $(DEPLOY) \
+	  -import-objc-header src/mac/batcore_bridge.h \
+	  $(SWIFT_SRC) \
+	  -o $(APP)/Contents/MacOS/batmon \
+	  -L build -lbatcore -lc++ \
+	  $(FRAMEWORKS) -framework AppKit -framework SwiftUI
+	codesign --force --sign - --timestamp=none $(APP)
+	@echo "Built $(APP) — launch with: open $(APP)"
+
+clean:
+	rm -rf build
+
+.PHONY: cli app clean

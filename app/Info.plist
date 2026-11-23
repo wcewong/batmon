@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Batmon</string>
+    <key>CFBundleDisplayName</key>
+    <string>Batmon</string>
+    <key>CFBundleExecutable</key>
+    <string>batmon</string>
+    <key>CFBundleIdentifier</key>
+    <string>ee.chong.wong.batmon</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>batmon reads the battery level of nearby Bluetooth devices.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>GPLv3. Port of krisgfx9/Wireless-Device-Battery-Monitor.</string>
+</dict>
+</plist>
